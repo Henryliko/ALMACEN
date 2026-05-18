@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventario - Almacén</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { background-color: #f8f9fa; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; }
+        .card-header { background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; }
+        .nav-tabs .nav-link.active { background: #0d6efd; color: white; }
+        .nav-tabs .nav-link { color: #495057; }
+        .table-responsive { max-height: 500px; overflow-y: auto; }
+        .btn-group-custom { gap: 5px; }
+        .stats-card { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
+        .stats-card.success { background: linear-gradient(135deg, #198754 0%, #146c43 100%); }
+        .stats-card.danger { background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%); }
+        .stats-card.warning { background: linear-gradient(135deg, #ffc107 0%, #ffca2c 100%); color: #000; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <h2 class="mb-0"><i class="bi bi-box-seam"></i> Sistema de Inventario - Almacén</h2>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-success me-2" onclick="exportarDatos()">
+                    <i class="bi bi-download"></i> Exportar Datos
+                </button>
+                <button class="btn btn-info" onclick="document.getElementById('importFile').click()">
+                    <i class="bi bi-upload"></i> Importar Datos
+                </button>
+                <input type="file" id="importFile" accept=".json" style="display:none" onchange="importarDatos(this)">
+            </div>
+        </div>
+
+        <!-- Tarjetas de Resumen -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h6>Total Productos</h6>
+                    <h3 id="totalProductos">0</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card success">
+                    <h6>Total Entradas</h6>
+                    <h3 id="totalEntradas">0</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card danger">
+                    <h6>Total Salidas</h6>
+                    <h3 id="totalSalidas">0</h3>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card warning">
+                    <h6>Valor Inventario</h6>
+                    <h3 id="valorInventario">$0</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="productos-tab" data-bs-toggle="tab" data-bs-target="#productos" type="button">
+                            <i class="bi bi-box"></i> Productos
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="entradas-tab" data-bs-toggle="tab" data-bs-target="#entradas" type="button">
+                            <i class="bi bi-arrow-down-circle"></i> Entradas
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="salidas-tab" data-bs-toggle="tab" data-bs-target="#salidas" type="button">
+                            <i class="bi bi-arrow-up-circle"></i> Salidas
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="registros-tab" data-bs-toggle="tab" data-bs-target="#registros" type="button">
+                            <i class="bi bi-journal-text"></i> Registros / Historial
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="myTabContent">
+                    
+                    <!-- HOJA DE PRODUCTOS -->
+                    <div class="tab-pane fade show active" id="productos">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalProducto">
+                                    <i class="bi bi-plus-circle"></i> Nuevo Producto
+                                </button>
+                                <button class="btn btn-secondary" onclick="cargarDatos()">
+                                    <i class="bi bi-arrow-clockwise"></i> Actualizar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="tablaProductos">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Precio Unit.</th>
+                                        <th>Inv. Inicial</th>
+                                        <th>Entradas</th>
+                                        <th>Salidas</th>
+                                        <th>Stock Actual</th>
+                                        <th>Total</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- HOJA DE ENTRADAS -->
+                    <div class="tab-pane fade" id="entradas">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalEntrada">
+                                    <i class="bi bi-plus-circle"></i> Nueva Entrada
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="tablaEntradas">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Factura</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio Unit.</th>
+                                        <th>Total</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- HOJA DE SALIDAS -->
+                    <div class="tab-pane fade" id="salidas">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalSalida">
+                                    <i class="bi bi-plus-circle"></i> Nueva Salida
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="tablaSalidas">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Cantidad</th>
+                                        <th>Destino/Uso</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- HOJA DE REGISTROS -->
+                    <div class="tab-pane fade" id="registros">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <button class="btn btn-success" onclick="exportarExcel()">
+                                    <i class="bi bi-file-excel"></i> Exportar a Excel
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                    <i class="bi bi-x-circle"></i> Limpiar Filtros
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" id="filtroCodigo" placeholder="Filtrar por código..." onkeyup="filtrarRegistros()">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="filtroTipo" onchange="filtrarRegistros()">
+                                    <option value="">Todos los tipos</option>
+                                    <option value="entrada">Entradas</option>
+                                    <option value="salida">Salidas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="date" class="form-control" id="filtroFecha" onchange="filtrarRegistros()">
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="tablaRegistros">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Tipo</th>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th>Documento/Factura</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio Unit.</th>
+                                        <th>Total</th>
+                                        <th>Detalle</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO PRODUCTO -->
+    <div class="modal fade" id="modalProducto" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Producto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formProducto">
+                        <div class="mb-3">
+                            <label class="form-label">Código del Producto</label>
+                            <input type="text" class="form-control" id="prodCodigo" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Descripción</label>
+                            <input type="text" class="form-control" id="prodDescripcion" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Precio Unitario</label>
+                            <input type="number" class="form-control" id="prodPrecio" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Inventario Inicial</label>
+                            <input type="number" class="form-control" id="prodInvInicial" value="0" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="guardarProducto()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVA ENTRADA -->
+    <div class="modal fade" id="modalEntrada" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Entrada</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formEntrada">
+                        <div class="mb-3">
+                            <label class="form-label">Producto</label>
+                            <select class="form-select" id="entProducto" required onchange="cargarPrecioProducto()">
+                                <option value="">Seleccionar producto...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Número de Factura</label>
+                            <input type="text" class="form-control" id="entFactura" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad</label>
+                            <input type="number" class="form-control" id="entCantidad" required min="1">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Precio Unitario</label>
+                            <input type="number" class="form-control" id="entPrecio" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" class="form-control" id="entFecha" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" onclick="guardarEntrada()">Registrar Entrada</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVA SALIDA -->
+    <div class="modal fade" id="modalSalida" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva Salida</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formSalida">
+                        <div class="mb-3">
+                            <label class="form-label">Producto</label>
+                            <select class="form-select" id="salProducto" required onchange="verificarStock()">
+                                <option value="">Seleccionar producto...</option>
+                            </select>
+                            <div id="stockInfo" class="form-text text-info"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad</label>
+                            <input type="number" class="form-control" id="salCantidad" required min="1">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Destino/Uso del Producto</label>
+                            <textarea class="form-control" id="salDestino" rows="2" placeholder="Ej: Mantenimiento de máquina X, Oficina, etc."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" class="form-control" id="salFecha" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="guardarSalida()">Registrar Salida</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ===== ESTRUCTURA DE DATOS =====
+        let productos = [];
+        let entradas = [];
+        let salidas = [];
+        let registros = [];
+
+        // ===== INICIALIZACIÓN =====
+        document.addEventListener('DOMContentLoaded', function() {
+            // Establecer fecha actual en los datepickers
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('entFecha').value = today;
+            document.getElementById('salFecha').value = today;
+            
+            // Cargar datos desde localStorage
+            cargarDatos();
+        });
+
+        // ===== PERSISTENCIA DE DATOS =====
+        function cargarDatos() {
+            const datosGuardados = localStorage.getItem('inventarioAlmacen');
+            if (datosGuardados) {
+                const datos = JSON.parse(datosGuardados);
+                productos = datos.productos || [];
+                entradas = datos.entradas || [];
+                salidas = datos.salidas || [];
+                registros = datos.registros || [];
+            }
+            actualizarUI();
+        }
+
+        function guardarDatos() {
+            const datos = { productos, entradas, salidas, registros };
+            localStorage.setItem('inventarioAlmacen', JSON.stringify(datos));
+            actualizarUI();
+        }
+
+        // ===== ACTUALIZAR INTERFAZ =====
+        function actualizarUI() {
+            renderizarProductos();
+            renderizarEntradas();
+            renderizarSalidas();
+            renderizarRegistros();
+            actualizarEstadisticas();
+            actualizarSelects();
+        }
+
+        function actualizarEstadisticas() {
+            document.getElementById('totalProductos').textContent = productos.length;
+            document.getElementById('totalEntradas').textContent = entradas.reduce((sum, e) => sum + e.cantidad, 0);
+            document.getElementById('totalSalidas').textContent = salidas.reduce((sum, s) => sum + s.cantidad, 0);
+            
+            const valorTotal = productos.reduce((sum, p) => sum + (p.stock * p.precio), 0);
+            document.getElementById('valorInventario').textContent = '$' + valorTotal.toLocaleString('es-CO', {minimumFractionDigits: 2});
+        }
+
+        function actualizarSelects() {
+            const selectProd = document.getElementById('entProducto');
+            const selectSal = document.getElementById('salProducto');
+            const options = '<option value="">Seleccionar producto...</option>' + 
+                productos.map(p => `<option value="${p.codigo}" data-precio="${p.precio}" data-stock="${p.stock}">${p.codigo} - ${p.descripcion}</option>`).join('');
+            
+            selectProd.innerHTML = options;
+            selectSal.innerHTML = options;
+        }
+
+        // ===== PRODUCTOS =====
+        function renderizarProductos() {
+            const tbody = document.querySelector('#tablaProductos tbody');
+            tbody.innerHTML = productos.map(p => {
+                const total = p.stock * p.precio;
+                return `
+                    <tr>
+                        <td>${p.codigo}</td>
+                        <td>${p.descripcion}</td>
+                        <td>$${p.precio.toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>${p.invInicial}</td>
+                        <td class="text-success">${p.entradas}</td>
+                        <td class="text-danger">${p.salidas}</td>
+                        <td><strong>${p.stock}</strong></td>
+                        <td>$${total.toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editarProducto('${p.codigo}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarProducto('${p.codigo}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function guardarProducto() {
+            const codigo = document.getElementById('prodCodigo').value.trim();
+            const descripcion = document.getElementById('prodDescripcion').value.trim();
+            const precio = parseFloat(document.getElementById('prodPrecio').value);
+            const invInicial = parseInt(document.getElementById('prodInvInicial').value) || 0;
+
+            if (!codigo || !descripcion || isNaN(precio)) {
+                alert('Por favor complete todos los campos correctamente');
+                return;
+            }
+
+            const productoExistente = productos.find(p => p.codigo === codigo);
+            if (productoExistente) {
+                alert('Ya existe un producto con ese código');
+                return;
+            }
+
+            productos.push({
+                codigo,
+                descripcion,
+                precio,
+                invInicial,
+                entradas: 0,
+                salidas: 0,
+                stock: invInicial
+            });
+
+            guardarDatos();
+            document.getElementById('formProducto').reset();
+            bootstrap.Modal.getInstance(document.getElementById('modalProducto')).hide();
+            alert('Producto guardado exitosamente');
+        }
+
+        function editarProducto(codigo) {
+            const producto = productos.find(p => p.codigo === codigo);
+            if (!producto) return;
+
+            document.getElementById('prodCodigo').value = producto.codigo;
+            document.getElementById('prodDescripcion').value = producto.descripcion;
+            document.getElementById('prodPrecio').value = producto.precio;
+            document.getElementById('prodInvInicial').value = producto.invInicial;
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalProducto'));
+            modal.show();
+        }
+
+        function eliminarProducto(codigo) {
+            if (confirm('¿Está seguro de eliminar este producto? Se eliminarán también todos los registros relacionados.')) {
+                productos = productos.filter(p => p.codigo !== codigo);
+                entradas = entradas.filter(e => e.codigo !== codigo);
+                salidas = salidas.filter(s => s.codigo !== codigo);
+                registros = registros.filter(r => r.codigo !== codigo);
+                guardarDatos();
+            }
+        }
+
+        // ===== ENTRADAS =====
+        function renderizarEntradas() {
+            const tbody = document.querySelector('#tablaEntradas tbody');
+            tbody.innerHTML = entradas.map((e, index) => {
+                const total = e.cantidad * e.precio;
+                return `
+                    <tr>
+                        <td>${e.fecha}</td>
+                        <td>${e.codigo}</td>
+                        <td>${e.descripcion}</td>
+                        <td>${e.factura}</td>
+                        <td class="text-success"><strong>${e.cantidad}</strong></td>
+                        <td>$${e.precio.toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>$${total.toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarEntrada(${index})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function cargarPrecioProducto() {
+            const select = document.getElementById('entProducto');
+            const selectedOption = select.options[select.selectedIndex];
+            const precio = selectedOption.getAttribute('data-precio');
+            if (precio) {
+                document.getElementById('entPrecio').value = precio;
+            }
+        }
+
+        function guardarEntrada() {
+            const selectProd = document.getElementById('entProducto');
+            const codigo = selectProd.value;
+            const factura = document.getElementById('entFactura').value.trim();
+            const cantidad = parseInt(document.getElementById('entCantidad').value);
+            const precio = parseFloat(document.getElementById('entPrecio').value);
+            const fecha = document.getElementById('entFecha').value;
+
+            if (!codigo || !factura || !cantidad || !precio || !fecha) {
+                alert('Por favor complete todos los campos');
+                return;
+            }
+
+            const producto = productos.find(p => p.codigo === codigo);
+            if (!producto) {
+                alert('Producto no encontrado');
+                return;
+            }
+
+            // Actualizar producto
+            producto.entradas += cantidad;
+            producto.stock = producto.invInicial + producto.entradas - producto.salidas;
+
+            // Registrar entrada
+            entradas.push({
+                codigo,
+                descripcion: producto.descripcion,
+                factura,
+                cantidad,
+                precio,
+                fecha,
+                total: cantidad * precio
+            });
+
+            // Agregar al historial
+            registros.push({
+                fecha,
+                tipo: 'entrada',
+                codigo,
+                descripcion: producto.descripcion,
+                documento: factura,
+                cantidad,
+                precio,
+                total: cantidad * precio,
+                detalle: `Entrada por factura ${factura}`
+            });
+
+            guardarDatos();
+            document.getElementById('formEntrada').reset();
+            document.getElementById('entFecha').value = new Date().toISOString().split('T')[0];
+            bootstrap.Modal.getInstance(document.getElementById('modalEntrada')).hide();
+            alert('Entrada registrada exitosamente');
+        }
+
+        function eliminarEntrada(index) {
+            if (confirm('¿Eliminar esta entrada?')) {
+                const entrada = entradas[index];
+                const producto = productos.find(p => p.codigo === entrada.codigo);
+                
+                if (producto) {
+                    producto.entradas -= entrada.cantidad;
+                    producto.stock = producto.invInicial + producto.entradas - producto.salidas;
+                }
+                
+                entradas.splice(index, 1);
+                registros = registros.filter(r => !(r.tipo === 'entrada' && r.fecha === entrada.fecha && r.codigo === entrada.codigo && r.cantidad === entrada.cantidad));
+                guardarDatos();
+            }
+        }
+
+        // ===== SALIDAS =====
+        function renderizarSalidas() {
+            const tbody = document.querySelector('#tablaSalidas tbody');
+            tbody.innerHTML = salidas.map((s, index) => {
+                return `
+                    <tr>
+                        <td>${s.fecha}</td>
+                        <td>${s.codigo}</td>
+                        <td>${s.descripcion}</td>
+                        <td class="text-danger"><strong>${s.cantidad}</strong></td>
+                        <td>${s.destino}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarSalida(${index})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function verificarStock() {
+            const select = document.getElementById('salProducto');
+            const selectedOption = select.options[select.selectedIndex];
+            const stock = selectedOption.getAttribute('data-stock');
+            const infoDiv = document.getElementById('stockInfo');
+            
+            if (stock !== 'null') {
+                infoDiv.textContent = `Stock disponible: ${stock} unidades`;
+            } else {
+                infoDiv.textContent = '';
+            }
+        }
+
+        function guardarSalida() {
+            const selectProd = document.getElementById('salProducto');
+            const codigo = selectProd.value;
+            const cantidad = parseInt(document.getElementById('salCantidad').value);
+            const destino = document.getElementById('salDestino').value.trim();
+            const fecha = document.getElementById('salFecha').value;
+
+            if (!codigo || !cantidad || !destino || !fecha) {
+                alert('Por favor complete todos los campos');
+                return;
+            }
+
+            const producto = productos.find(p => p.codigo === codigo);
+            if (!producto) {
+                alert('Producto no encontrado');
+                return;
+            }
+
+            if (producto.stock < cantidad) {
+                alert(`Stock insuficiente. Stock actual: ${producto.stock}`);
+                return;
+            }
+
+            // Actualizar producto
+            producto.salidas += cantidad;
+            producto.stock = producto.invInicial + producto.entradas - producto.salidas;
+
+            // Registrar salida
+            salidas.push({
+                codigo,
+                descripcion: producto.descripcion,
+                cantidad,
+                destino,
+                fecha
+            });
+
+            // Agregar al historial
+            registros.push({
+                fecha,
+                tipo: 'salida',
+                codigo,
+                descripcion: producto.descripcion,
+                documento: '-',
+                cantidad: -cantidad,
+                precio: producto.precio,
+                total: -(cantidad * producto.precio),
+                detalle: `Salida: ${destino}`
+            });
+
+            guardarDatos();
+            document.getElementById('formSalida').reset();
+            document.getElementById('salFecha').value = new Date().toISOString().split('T')[0];
+            document.getElementById('stockInfo').textContent = '';
+            bootstrap.Modal.getInstance(document.getElementById('modalSalida')).hide();
+            alert('Salida registrada exitosamente');
+        }
+
+        function eliminarSalida(index) {
+            if (confirm('¿Eliminar esta salida?')) {
+                const salida = salidas[index];
+                const producto = productos.find(p => p.codigo === salida.codigo);
+                
+                if (producto) {
+                    producto.salidas -= salida.cantidad;
+                    producto.stock = producto.invInicial + producto.entradas - producto.salidas;
+                }
+                
+                salidas.splice(index, 1);
+                registros = registros.filter(r => !(r.tipo === 'salida' && r.fecha === salida.fecha && r.codigo === salida.codigo && r.cantidad === -salida.cantidad));
+                guardarDatos();
+            }
+        }
+
+        // ===== REGISTROS / HISTORIAL =====
+        function renderizarRegistros() {
+            const tbody = document.querySelector('#tablaRegistros tbody');
+            const registrosOrdenados = [...registros].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            
+            tbody.innerHTML = registrosOrdenados.map(r => {
+                const tipoBadge = r.tipo === 'entrada' 
+                    ? '<span class="badge bg-success">Entrada</span>'
+                    : '<span class="badge bg-danger">Salida</span>';
+                
+                const cantidadMostrar = r.tipo === 'entrada' ? r.cantidad : Math.abs(r.cantidad);
+                const totalMostrar = r.tipo === 'entrada' ? r.total : -r.total;
+                
+                return `
+                    <tr>
+                        <td>${r.fecha}</td>
+                        <td>${tipoBadge}</td>
+                        <td>${r.codigo}</td>
+                        <td>${r.descripcion}</td>
+                        <td>${r.documento}</td>
+                        <td class="${r.tipo === 'entrada' ? 'text-success' : 'text-danger'}">${cantidadMostrar}</td>
+                        <td>$${r.precio.toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>$${Math.abs(totalMostrar).toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>${r.detalle}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filtrarRegistros() {
+            const filtroCodigo = document.getElementById('filtroCodigo').value.toLowerCase();
+            const filtroTipo = document.getElementById('filtroTipo').value;
+            const filtroFecha = document.getElementById('filtroFecha').value;
+
+            const tbody = document.querySelector('#tablaRegistros tbody');
+            const registrosOrdenados = [...registros]
+                .filter(r => {
+                    const matchCodigo = r.codigo.toLowerCase().includes(filtroCodigo);
+                    const matchTipo = !filtroTipo || r.tipo === filtroTipo;
+                    const matchFecha = !filtroFecha || r.fecha === filtroFecha;
+                    return matchCodigo && matchTipo && matchFecha;
+                })
+                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+            tbody.innerHTML = registrosOrdenados.map(r => {
+                const tipoBadge = r.tipo === 'entrada' 
+                    ? '<span class="badge bg-success">Entrada</span>'
+                    : '<span class="badge bg-danger">Salida</span>';
+                
+                const cantidadMostrar = r.tipo === 'entrada' ? r.cantidad : Math.abs(r.cantidad);
+                const totalMostrar = r.tipo === 'entrada' ? r.total : -r.total;
+                
+                return `
+                    <tr>
+                        <td>${r.fecha}</td>
+                        <td>${tipoBadge}</td>
+                        <td>${r.codigo}</td>
+                        <td>${r.descripcion}</td>
+                        <td>${r.documento}</td>
+                        <td class="${r.tipo === 'entrada' ? 'text-success' : 'text-danger'}">${cantidadMostrar}</td>
+                        <td>$${r.precio.toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>$${Math.abs(totalMostrar).toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+                        <td>${r.detalle}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function limpiarFiltros() {
+            document.getElementById('filtroCodigo').value = '';
+            document.getElementById('filtroTipo').value = '';
+            document.getElementById('filtroFecha').value = '';
+            renderizarRegistros();
+        }
+
+        // ===== EXPORTAR A EXCEL =====
+        function exportarExcel() {
+            // Crear libro de trabajo
+            const wb = XLSX.utils.book_new();
+
+            // Hoja de Productos
+            const dataProductos = productos.map(p => ({
+                'Código': p.codigo,
+                'Descripción': p.descripcion,
+                'Precio Unitario': p.precio,
+                'Inventario Inicial': p.invInicial,
+                'Entradas': p.entradas,
+                'Salidas': p.salidas,
+                'Stock Actual': p.stock,
+                'Total': p.stock * p.precio
+            }));
+            const wsProductos = XLSX.utils.json_to_sheet(dataProductos);
+            XLSX.utils.book_append_sheet(wb, wsProductos, 'Productos');
+
+            // Hoja de Entradas
+            const dataEntradas = entradas.map(e => ({
+                'Fecha': e.fecha,
+                'Código': e.codigo,
+                'Descripción': e.descripcion,
+                'Factura': e.factura,
+                'Cantidad': e.cantidad,
+                'Precio Unitario': e.precio,
+                'Total': e.total
+            }));
+            const wsEntradas = XLSX.utils.json_to_sheet(dataEntradas);
+            XLSX.utils.book_append_sheet(wb, wsEntradas, 'Entradas');
+
+            // Hoja de Salidas
+            const dataSalidas = salidas.map(s => ({
+                'Fecha': s.fecha,
+                'Código': s.codigo,
+                'Descripción': s.descripcion,
+                'Cantidad': s.cantidad,
+                'Destino/Uso': s.destino
+            }));
+            const wsSalidas = XLSX.utils.json_to_sheet(dataSalidas);
+            XLSX.utils.book_append_sheet(wb, wsSalidas, 'Salidas');
+
+            // Hoja de Registros
+            const dataRegistros = [...registros]
+                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+                .map(r => ({
+                    'Fecha': r.fecha,
+                    'Tipo': r.tipo === 'entrada' ? 'Entrada' : 'Salida',
+                    'Código': r.codigo,
+                    'Descripción': r.descripcion,
+                    'Documento': r.documento,
+                    'Cantidad': r.tipo === 'entrada' ? r.cantidad : Math.abs(r.cantidad),
+                    'Precio Unitario': r.precio,
+                    'Total': Math.abs(r.total),
+                    'Detalle': r.detalle
+                }));
+            const wsRegistros = XLSX.utils.json_to_sheet(dataRegistros);
+            XLSX.utils.book_append_sheet(wb, wsRegistros, 'Registros');
+
+            // Descargar archivo
+            const fecha = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `Inventario_Almacen_${fecha}.xlsx`);
+            alert('Archivo Excel exportado exitosamente');
+        }
+
+        // ===== EXPORTAR DATOS JSON (Para sincronizar entre dispositivos) =====
+        function exportarDatos() {
+            const datos = {
+                productos,
+                entradas,
+                salidas,
+                registros,
+                fechaExportacion: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(datos, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const fecha = new Date().toISOString().split('T')[0];
+            a.download = `inventario_respaldo_${fecha}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            alert('Datos exportados. Puede compartir este archivo con otros dispositivos.');
+        }
+
+        // ===== IMPORTAR DATOS JSON =====
+        function importarDatos(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const datos = JSON.parse(e.target.result);
+                    
+                    if (datos.productos && datos.entradas && datos.salidas && datos.registros) {
+                        if (confirm('¿Esto reemplazará todos los datos actuales. Continuar?')) {
+                            productos = datos.productos;
+                            entradas = datos.entradas;
+                            salidas = datos.salidas;
+                            registros = datos.registros;
+                            guardarDatos();
+                            alert('Datos importados exitosamente');
+                        }
+                    } else {
+                        alert('El archivo no tiene el formato correcto');
+                    }
+                } catch (err) {
+                    alert('Error al leer el archivo');
+                }
+            };
+            reader.readAsText(file);
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
